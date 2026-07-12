@@ -31,20 +31,20 @@ export default function LoginPage(){
   }
  }
 
- return <main className="grid min-h-screen place-items-center bg-gradient-to-br from-brand-50 via-cream to-emerald-50 p-4">
+ return <main className="grid min-h-screen min-h-[100dvh] place-items-center bg-gradient-to-br from-brand-50 via-cream to-emerald-50 px-3 py-5 min-[380px]:px-4 sm:py-8">
   <div className="w-full max-w-md">
-   <div className="mb-7 text-center">
+   <div className="mb-5 text-center sm:mb-7">
     <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-brand-600 text-white"><Building2/></div>
-    <h1 className="text-3xl font-bold">Cuartos ADI</h1>
-    <p className="mt-2 text-stone-500">Control simple y claro de sus alquileres</p>
+    <h1 className="text-2xl font-bold sm:text-3xl">Cuartos ADI</h1>
+    <p className="mt-2 text-sm text-stone-500 sm:text-base">Control simple y claro de sus alquileres</p>
    </div>
-   <form onSubmit={handleSubmit} className="card p-6">
+   <form onSubmit={handleSubmit} className="card p-4 min-[380px]:p-5 sm:p-6">
     <h2 className="text-xl font-bold">Ingresar</h2>
     <p className="mt-1 text-sm text-stone-500">Elija su perfil e ingrese la clave de acceso.</p>
     <div className="mt-5 grid gap-3">
-     {roles.map(({value,title,text,Icon})=><button key={value} type="button" onClick={()=>{setRole(value);setError('')}} className={`flex items-center gap-3 rounded-xl border p-4 text-left ${role===value?'border-brand-500 bg-brand-50 ring-2 ring-brand-100':'border-stone-200 bg-white'}`}>
+     {roles.map(({value,title,text,Icon})=><button key={value} type="button" onClick={()=>{setRole(value);setError('')}} className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-left min-[380px]:p-4 ${role===value?'border-brand-500 bg-brand-50 ring-2 ring-brand-100':'border-stone-200 bg-white'}`}>
       <Icon className="text-brand-700"/>
-      <span><b className="block">{title}</b><span className="text-sm text-stone-500">{text}</span></span>
+      <span className="min-w-0"><b className="block">{title}</b><span className="block break-words text-sm text-stone-500">{text}</span></span>
      </button>)}
     </div>
     <label className="mt-5 block text-sm font-semibold text-stone-700" htmlFor="password">Clave</label>
