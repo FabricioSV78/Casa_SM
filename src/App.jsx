@@ -1,0 +1,11 @@
+import {Navigate,Route,Routes} from 'react-router-dom'
+import {useApp} from './context/AppContext'
+import AppLayout from './layouts/AppLayout'
+import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
+import MovementsPage from './pages/MovementsPage'
+import MovementFormPage from './pages/MovementFormPage'
+import TenantsPage from './pages/TenantsPage'
+import PropertiesPage from './pages/PropertiesPage'
+import ReportsPage from './pages/ReportsPage'
+export default function App(){const {user}=useApp();if(!user)return <LoginPage/>;return <AppLayout><Routes><Route path="/" element={<DashboardPage/>}/><Route path="/movimientos" element={<MovementsPage/>}/><Route path="/movimientos/nuevo" element={<MovementFormPage/>}/><Route path="/inquilinos" element={<TenantsPage/>}/><Route path="/espacios" element={<PropertiesPage/>}/><Route path="/reportes" element={<ReportsPage/>}/><Route path="*" element={<Navigate to="/" replace/>}/></Routes></AppLayout>}
