@@ -1,6 +1,7 @@
 import {AlertCircle,Download,TrendingDown,TrendingUp,Wallet} from 'lucide-react'
 import {Cell,Pie,PieChart,ResponsiveContainer,Tooltip} from 'recharts'
 import {useApp} from '../context/AppContext'
+import {getAccountBalance} from '../constants/account'
 import {PageHeader,StatCard} from '../components/ui'
 import {money} from '../utils/format'
 
@@ -9,6 +10,7 @@ export default function ReportsPage(){
  const active=movements.filter(x=>x.estado==='activo')
  const income=active.filter(x=>x.tipo==='ingreso').reduce((sum,x)=>sum+Number(x.monto||0),0)
  const expense=active.filter(x=>x.tipo==='gasto').reduce((sum,x)=>sum+Number(x.monto||0),0)
+ const accountBalance=getAccountBalance(active)
  const debt=obligations.reduce((sum,x)=>sum+Number(x.saldoPendiente||0),0)
  const cats=Object.values(active.filter(x=>x.tipo==='gasto').reduce((acc,x)=>{
   acc[x.categoria]??={name:x.categoria||'Sin categoria',value:0}
@@ -29,7 +31,7 @@ export default function ReportsPage(){
   <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
    <StatCard label="Ingresos acumulados" value={money(income)} icon={TrendingUp} color="green"/>
    <StatCard label="Gastos acumulados" value={money(expense)} icon={TrendingDown} color="red"/>
-   <StatCard label="Flujo de caja" value={money(income-expense)} icon={Wallet} color="blue"/>
+   <StatCard label="Saldo disponible" value={money(accountBalance)} icon={Wallet} color="blue"/>
    <StatCard label="Deudas pendientes" value={money(debt)} icon={AlertCircle}/>
   </div>
   <div className="mt-5 grid gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-2">

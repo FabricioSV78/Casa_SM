@@ -1,6 +1,8 @@
 import {hasSupabaseConfig,requireSupabase,usingMocks} from './supabaseClient'
+import {getAccountBalance} from '../constants/account'
 
-const ACCESS_KEY=(import.meta.env.VITE_APP_ACCESS_KEY||'111943').trim()
+const ADMIN_ACCESS_KEY=(import.meta.env.VITE_ADMIN_ACCESS_KEY||'71539917').trim()
+const OWNER_ACCESS_KEY=(import.meta.env.VITE_OWNER_ACCESS_KEY||import.meta.env.VITE_APP_ACCESS_KEY||'111943').trim()
 const SESSION_HOURS=12
 
 let currentSession=null
@@ -197,7 +199,8 @@ function normalizeDay(day){
 
 async function login(rol,clave){
  if(!hasSupabaseConfig)throw new Error('Supabase no configurado')
- if(String(clave)!==ACCESS_KEY)throw new Error('Clave incorrecta')
+ const expectedKey=rol==='administradora'?ADMIN_ACCESS_KEY:OWNER_ACCESS_KEY
+ if(String(clave)!==expectedKey)throw new Error('Clave incorrecta')
  const db=requireSupabase()
  const {data,error}=await db.from(tables.users).select('*').eq('rol',rol).eq('estado','activo').maybeSingle()
  if(error)throw error
@@ -290,7 +293,7 @@ async function dashboard(month,year){
  })
  const income=items.filter(item=>item.tipo==='ingreso').reduce((sum,item)=>sum+Number(item.monto||0),0)
  const expense=items.filter(item=>item.tipo==='gasto').reduce((sum,item)=>sum+Number(item.monto||0),0)
- const available=movements.reduce((sum,item)=>sum+(item.tipo==='ingreso'?Number(item.monto||0):-Number(item.monto||0)),0)
+ const available=getAccountBalance(movements)
  const pending=obligations.reduce((sum,item)=>sum+Number(item.saldoPendiente||0),0)
  const debtors=new Set(obligations.filter(item=>Number(item.saldoPendiente||0)>0).map(item=>item.inquilinoId)).size
  return {income,expense,balance:income-expense,available,count:items.length,pending,debtors,movements:items}

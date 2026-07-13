@@ -3,6 +3,7 @@ import {Building2,Plus,Receipt,TrendingDown,TrendingUp,Wallet} from 'lucide-reac
 import {Area,AreaChart,Bar,BarChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts'
 import {Link} from 'react-router-dom'
 import {useApp} from '../context/AppContext'
+import {getAccountBalance} from '../constants/account'
 import {datePE,money,monthName} from '../utils/format'
 import {Empty,PageHeader,StatCard} from '../components/ui'
 
@@ -21,7 +22,7 @@ export default function DashboardPage(){
 
  const income=filtered.filter(x=>x.tipo==='ingreso').reduce((sum,x)=>sum+Number(x.monto||0),0)
  const expense=filtered.filter(x=>x.tipo==='gasto').reduce((sum,x)=>sum+Number(x.monto||0),0)
- const totalBalance=movements.filter(x=>x.estado==='activo').reduce((sum,x)=>sum+(x.tipo==='ingreso'?Number(x.monto||0):-Number(x.monto||0)),0)
+ const totalBalance=getAccountBalance(movements)
 
  const daily=Object.values(filtered.reduce((acc,x)=>{
   const day=Number(String(x.fechaMovimiento).slice(-2))

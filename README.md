@@ -22,7 +22,7 @@ copy .env.example .env
 npm run dev
 ```
 
-Abra la URL que muestra Vite. La clave por defecto para administradora y propietaria es `111943`.
+Abra la URL que muestra Vite. Las claves por defecto son `71539917` para administradora y `111943` para propietaria.
 
 Si `VITE_SUPABASE_URL` o `VITE_SUPABASE_ANON_KEY` estan vacios, la app usa los datos de `src/data/mockData.js` como respaldo local.
 
@@ -36,7 +36,9 @@ Si `VITE_SUPABASE_URL` o `VITE_SUPABASE_ANON_KEY` estan vacios, la app usa los d
 ```env
 VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_ANON_KEY=TU_ANON_KEY
-VITE_APP_ACCESS_KEY=111943
+VITE_ADMIN_ACCESS_KEY=71539917
+VITE_OWNER_ACCESS_KEY=111943
+VITE_INITIAL_ACCOUNT_BALANCE=9400.78
 VITE_USE_MOCKS=false
 ```
 
@@ -73,7 +75,7 @@ docs/           SQL y guias de configuracion
 3. Framework preset: **Vite**.
 4. Build command: `npm run build`.
 5. Output directory: `dist`.
-6. Agregue `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_APP_ACCESS_KEY`, `VITE_USE_MOCKS=false` y `NODE_VERSION=20`.
+6. Agregue `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ADMIN_ACCESS_KEY`, `VITE_OWNER_ACCESS_KEY`, `VITE_INITIAL_ACCOUNT_BALANCE`, `VITE_USE_MOCKS=false` y `NODE_VERSION=20`.
 7. Despliegue.
 
 La guia detallada esta en [`docs/CLOUDFLARE_PAGES.md`](docs/CLOUDFLARE_PAGES.md).

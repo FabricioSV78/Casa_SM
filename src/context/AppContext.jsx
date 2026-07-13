@@ -4,7 +4,8 @@ import {uid} from '../utils/format'
 import {dataService} from '../services/dataService'
 
 const Context=createContext(null)
-const ACCESS_KEY='111943'
+const ADMIN_ACCESS_KEY=import.meta.env.VITE_ADMIN_ACCESS_KEY||'71539917'
+const OWNER_ACCESS_KEY=import.meta.env.VITE_OWNER_ACCESS_KEY||import.meta.env.VITE_APP_ACCESS_KEY||'111943'
 const AUTH_VERSION='supabase-auth-v1'
 const USER_KEY='cuartos-user'
 
@@ -70,7 +71,8 @@ export function AppProvider({children}){
 
  const login=async(role,password)=>{
   if(dataService.usingMocks){
-   if(password!==ACCESS_KEY)return false
+   const expectedKey=role==='administradora'?ADMIN_ACCESS_KEY:OWNER_ACCESS_KEY
+   if(password!==expectedKey)return false
    const found=users.find(u=>u.rol===role)
    if(!found)return false
    persistUser({...found,authVersion:AUTH_VERSION})

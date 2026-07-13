@@ -15,7 +15,10 @@ El SQL tambien crea los usuarios base:
 - Administradora: `Karla`, rol `administradora`
 - Propietaria: `Ada`, rol `propietaria`
 
-La clave de acceso sigue siendo `111943` por defecto, configurada en React con `VITE_APP_ACCESS_KEY`.
+Las claves de acceso por defecto son:
+
+- Administradora: `71539917`, configurada con `VITE_ADMIN_ACCESS_KEY`
+- Propietaria: `111943`, configurada con `VITE_OWNER_ACCESS_KEY`
 
 ## 2. Obtener credenciales
 
@@ -33,7 +36,9 @@ Edita `.env`:
 ```env
 VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_ANON_KEY=TU_ANON_KEY
-VITE_APP_ACCESS_KEY=111943
+VITE_ADMIN_ACCESS_KEY=71539917
+VITE_OWNER_ACCESS_KEY=111943
+VITE_INITIAL_ACCOUNT_BALANCE=9400.78
 VITE_USE_MOCKS=false
 ```
 
