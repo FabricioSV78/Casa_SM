@@ -8,7 +8,9 @@ La app ya no usa Google Sheets ni Apps Script. Ahora lee y escribe desde Supabas
 2. Abre **SQL Editor**.
 3. Copia y ejecuta completo el archivo [`docs/supabase_schema.sql`](./supabase_schema.sql).
 4. Verifica en **Table Editor** que existan estas tablas:
-   `usuarios`, `inquilinos`, `propiedades`, `movimientos`, `obligaciones_mensuales`, `aplicaciones_pago`, `categorias`, `auditoria`.
+   `usuarios`, `inquilinos`, `inquilinos_propiedades`, `propiedades`, `movimientos`, `movimientos_propiedades`, `obligaciones_mensuales`, `aplicaciones_pago`, `categorias`, `auditoria`.
+
+Si el proyecto ya estaba configurado antes de agregar empresas con varios espacios, ejecuta una sola vez [`docs/supabase_multi_space_migration.sql`](./supabase_multi_space_migration.sql) desde **SQL Editor**. La migracion conserva las asignaciones y movimientos existentes.
 
 El SQL tambien crea los usuarios base:
 
@@ -67,8 +69,10 @@ Puedes crear datos desde la misma app una vez conectado Supabase. Si ya tienes d
 |---|---|
 | Usuarios | usuarios |
 | Inquilinos | inquilinos |
+| Asignaciones de espacios | inquilinos_propiedades |
 | Propiedades | propiedades |
 | Movimientos | movimientos |
+| Espacios por movimiento | movimientos_propiedades |
 | ObligacionesMensuales | obligaciones_mensuales |
 | AplicacionesPago | aplicaciones_pago |
 | Categorias | categorias |

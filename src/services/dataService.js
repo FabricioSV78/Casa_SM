@@ -10,8 +10,10 @@ let currentSession=null
 const tables={
  users:'usuarios',
  tenants:'inquilinos',
+ tenantProperties:'inquilinos_propiedades',
  properties:'propiedades',
  movements:'movimientos',
+ movementProperties:'movimientos_propiedades',
  obligations:'obligaciones_mensuales',
  paymentApplications:'aplicaciones_pago',
  audit:'auditoria'
@@ -20,8 +22,10 @@ const tables={
 const fields={
  usuarios:{creadoEn:'creado_en'},
  inquilinos:{propiedadId:'propiedad_id',fechaInicio:'fecha_inicio',precioMensual:'precio_mensual',diaPago:'dia_pago',creadoEn:'creado_en',actualizadoEn:'actualizado_en'},
+ inquilinos_propiedades:{inquilinoId:'inquilino_id',propiedadId:'propiedad_id',creadoEn:'creado_en'},
  propiedades:{precioReferencial:'precio_referencial',inquilinoActualId:'inquilino_actual_id',creadoEn:'creado_en',actualizadoEn:'actualizado_en'},
  movimientos:{fechaMovimiento:'fecha_movimiento',inquilinoId:'inquilino_id',propiedadId:'propiedad_id',metodoPago:'metodo_pago',tipoPago:'tipo_pago',periodosRelacionados:'periodos_relacionados',usuarioId:'usuario_id',creadoEn:'creado_en',actualizadoEn:'actualizado_en'},
+ movimientos_propiedades:{movimientoId:'movimiento_id',propiedadId:'propiedad_id',creadoEn:'creado_en'},
  obligaciones_mensuales:{inquilinoId:'inquilino_id',propiedadId:'propiedad_id',montoEsperado:'monto_esperado',montoPagado:'monto_pagado',saldoPendiente:'saldo_pendiente',fechaVencimiento:'fecha_vencimiento',creadoEn:'creado_en',actualizadoEn:'actualizado_en'},
  aplicaciones_pago:{movimientoId:'movimiento_id',obligacionId:'obligacion_id',montoAplicado:'monto_aplicado',creadoEn:'creado_en'},
  auditoria:{entidadId:'entidad_id',datosAnteriores:'datos_anteriores',datosNuevos:'datos_nuevos',usuarioId:'usuario_id'}
@@ -30,8 +34,10 @@ const fields={
 const dbColumns={
  usuarios:['id','nombre','usuario','rol','estado','creado_en'],
  inquilinos:['id','nombre','documento','celular','correo','tipo','propiedad_id','fecha_inicio','precio_mensual','dia_pago','garantia','estado','observaciones','creado_en','actualizado_en'],
+ inquilinos_propiedades:['id','inquilino_id','propiedad_id','creado_en'],
  propiedades:['id','codigo','nombre','tipo','ubicacion','precio_referencial','estado','inquilino_actual_id','observaciones','creado_en','actualizado_en'],
  movimientos:['id','tipo','fecha_movimiento','monto','categoria','concepto','inquilino_id','propiedad_id','metodo_pago','tipo_pago','periodos_relacionados','observaciones','usuario_id','creado_en','actualizado_en','estado'],
+ movimientos_propiedades:['id','movimiento_id','propiedad_id','creado_en'],
  obligaciones_mensuales:['id','inquilino_id','propiedad_id','periodo','monto_esperado','monto_pagado','saldo_pendiente','estado','fecha_vencimiento','creado_en','actualizado_en'],
  aplicaciones_pago:['id','movimiento_id','obligacion_id','monto_aplicado','creado_en'],
  auditoria:['id','entidad','entidad_id','accion','datos_anteriores','datos_nuevos','usuario_id','fecha']
@@ -131,7 +137,7 @@ async function list(table,filters={}){
  const db=requireSupabase()
  let query=db.from(table).select('*')
  if(filters.id)query=query.eq('id',filters.id)
- if(table!==tables.paymentApplications)query=query.neq('estado','eliminado')
+ if(![tables.paymentApplications,tables.tenantProperties,tables.movementProperties].includes(table))query=query.neq('estado','eliminado')
  if(table===tables.movements)query=query.order('fecha_movimiento',{ascending:false})
  if(table===tables.tenants)query=query.order('nombre',{ascending:true})
  if(table===tables.properties)query=query.order('codigo',{ascending:true})
@@ -139,6 +145,50 @@ async function list(table,filters={}){
  const {data,error}=await query
  if(error)throw error
  return (data||[]).map(row=>fromDb(table,row))
+}
+
+function uniqueIds(values=[]){
+ return [...new Set((values||[]).filter(Boolean).map(String))]
+}
+
+function missingRelation(error,table){
+ const message=String(error?.message||'').toLowerCase()
+ return error?.code==='42P01'||error?.code==='PGRST205'||(message.includes(table)&&message.includes('schema cache'))
+}
+
+async function listRelations(table){
+ requireSession()
+ const db=requireSupabase()
+ const {data,error}=await db.from(table).select('*')
+ if(error){
+  if(missingRelation(error,table))return {available:false,rows:[]}
+  throw error
+ }
+ return {available:true,rows:(data||[]).map(row=>fromDb(table,row))}
+}
+
+function tenantPropertyIds(tenant,relations=[]){
+ return uniqueIds([
+  ...relations.filter(item=>item.inquilinoId===tenant.id).map(item=>item.propiedadId),
+  tenant.propiedadId
+ ])
+}
+
+function movementPropertyIds(movement,relations=[]){
+ return uniqueIds([
+  ...relations.filter(item=>item.movimientoId===movement.id).map(item=>item.propiedadId),
+  movement.propiedadId
+ ])
+}
+
+async function listTenants(filters={}){
+ const [items,relationResult]=await Promise.all([list(tables.tenants,filters),listRelations(tables.tenantProperties)])
+ return items.map(item=>({...item,propiedadIds:tenantPropertyIds(item,relationResult.rows)}))
+}
+
+async function listMovements(filters={}){
+ const [items,relationResult]=await Promise.all([list(tables.movements,filters),listRelations(tables.movementProperties)])
+ return items.map(item=>({...item,propiedadIds:movementPropertyIds(item,relationResult.rows)}))
 }
 
 async function create(table,input){
@@ -184,12 +234,73 @@ async function releasePropertyAssignment(propertyId,usuarioId){
  if(!propertyId)return null
  const property=(await list(tables.properties,{id:propertyId}))[0]
  if(!property)return null
+ if(!property.inquilinoActualId&&property.estado==='disponible')return property
  return update(tables.properties,{
   id:property.id,
   estado:'disponible',
   inquilinoActualId:null,
   usuarioId
  })
+}
+
+async function inspectTenantAssignments(tenantId,type,propertyIds){
+ const ids=uniqueIds(propertyIds)
+ if(type!=='empresa'&&ids.length>1)throw new Error('Una persona solo puede tener un espacio asignado')
+
+ const [properties,relationResult]=await Promise.all([
+  list(tables.properties,{}),
+  listRelations(tables.tenantProperties)
+ ])
+ if(ids.length>1&&!relationResult.available)throw new Error('Ejecute la migracion de espacios multiples en Supabase antes de asignar varios espacios')
+
+ const propertiesById=new Map(properties.map(item=>[item.id,item]))
+ for(const id of ids){
+  const property=propertiesById.get(id)
+  if(!property)throw new Error('Uno de los espacios seleccionados ya no existe')
+  const assignedElsewhere=relationResult.rows.some(item=>item.propiedadId===id&&item.inquilinoId!==tenantId)
+  const occupiedElsewhere=property.inquilinoActualId&&property.inquilinoActualId!==tenantId
+  const unavailable=!['disponible','ocupada'].includes(property.estado)
+  if(assignedElsewhere||occupiedElsewhere||unavailable)throw new Error(`${property.codigo} no esta disponible`)
+ }
+
+ return {ids,properties,relationResult}
+}
+
+async function replaceTenantRelations(tenantId,propertyIds,relationAvailable){
+ if(!relationAvailable)return
+ const db=requireSupabase()
+ const {error:deleteError}=await db.from(tables.tenantProperties).delete().eq('inquilino_id',tenantId)
+ if(deleteError)throw deleteError
+ if(!propertyIds.length)return
+ const now=new Date().toISOString()
+ const rows=propertyIds.map(propiedadId=>toDb(tables.tenantProperties,{
+  id:crypto.randomUUID(),
+  inquilinoId:tenantId,
+  propiedadId,
+  creadoEn:now
+ }))
+ const {error:insertError}=await db.from(tables.tenantProperties).insert(rows)
+ if(insertError)throw insertError
+}
+
+async function syncTenantAssignments(tenant,propertyIds,inspection,usuarioId,previousTenant=null){
+ const {properties,relationResult}=inspection
+ const previousIds=previousTenant?tenantPropertyIds(previousTenant,relationResult.rows):[]
+ const targetIds=uniqueIds(propertyIds)
+ await replaceTenantRelations(tenant.id,targetIds,relationResult.available)
+
+ const removedIds=previousIds.filter(id=>!targetIds.includes(id))
+ for(const id of removedIds){
+  const property=properties.find(item=>item.id===id)
+  if(property?.inquilinoActualId===tenant.id)await releasePropertyAssignment(id,usuarioId)
+ }
+ for(const id of targetIds){
+  const property=properties.find(item=>item.id===id)
+  if(property&&(property.estado!=='ocupada'||property.inquilinoActualId!==tenant.id)){
+   await update(tables.properties,{id,estado:'ocupada',inquilinoActualId:tenant.id,usuarioId})
+  }
+ }
+ return {...tenant,propiedadId:targetIds[0]||null,propiedadIds:targetIds}
 }
 
 function normalizeDay(day){
@@ -212,27 +323,118 @@ async function login(rol,clave){
 }
 
 async function createTenant(input){
- return create(tables.tenants,input)
+ const session=requireAdmin()
+ const data=sanitize(input)
+ const propertyIds=uniqueIds(data.propiedadIds?.length?data.propiedadIds:[data.propiedadId])
+ const inspection=await inspectTenantAssignments('',data.tipo||'persona',propertyIds)
+ const saved=await create(tables.tenants,{...data,propiedadId:propertyIds[0]||null,usuarioId:data.usuarioId||session.id})
+ return syncTenantAssignments(saved,propertyIds,inspection,data.usuarioId||session.id)
+}
+
+async function updateTenant(input){
+ const session=requireAdmin()
+ const old=(await listTenants({id:input.id}))[0]
+ if(!old)throw new Error('Inquilino no encontrado')
+ const data=sanitize(input)
+ const propertyIds=uniqueIds(data.propiedadIds!==undefined?data.propiedadIds:old.propiedadIds)
+ const type=data.tipo||old.tipo||'persona'
+ const inspection=await inspectTenantAssignments(old.id,type,propertyIds)
+ const saved=await update(tables.tenants,{...data,tipo:type,propiedadId:propertyIds[0]||null,usuarioId:data.usuarioId||session.id})
+ return syncTenantAssignments(saved,propertyIds,inspection,data.usuarioId||session.id,old)
 }
 
 async function deleteTenant(id,usuarioId){
- const tenant=(await list(tables.tenants,{id}))[0]
+ const tenant=(await listTenants({id}))[0]
  if(!tenant)throw new Error('Inquilino no encontrado')
  const deleted=await logicalDelete(tables.tenants,{id,usuarioId})
- const property=await releasePropertyAssignment(tenant.propiedadId,usuarioId)
- return {tenant:deleted,property}
+ const relationResult=await listRelations(tables.tenantProperties)
+ await replaceTenantRelations(id,[],relationResult.available)
+ const releasedProperties=[]
+ for(const propertyId of tenant.propiedadIds){
+  const property=await releasePropertyAssignment(propertyId,usuarioId)
+  if(property)releasedProperties.push(property)
+ }
+ return {tenant:{...deleted,propiedadIds:[]},properties:releasedProperties}
 }
 
 async function deleteProperty(id,usuarioId){
  const property=(await list(tables.properties,{id}))[0]
  if(!property)throw new Error('Espacio no encontrado')
- const relatedTenants=(await list(tables.tenants,{})).filter(item=>item.propiedadId===id)
+ const relatedTenants=(await listTenants({})).filter(item=>item.propiedadIds.includes(id))
+ const relationResult=await listRelations(tables.tenantProperties)
+ if(relationResult.available){
+  const db=requireSupabase()
+  const {error}=await db.from(tables.tenantProperties).delete().eq('propiedad_id',id)
+  if(error)throw error
+ }
  const updatedTenants=[]
  for(const tenant of relatedTenants){
-  updatedTenants.push(await update(tables.tenants,{id:tenant.id,propiedadId:null,usuarioId}))
+  const remainingIds=tenant.propiedadIds.filter(propertyId=>propertyId!==id)
+  const saved=await update(tables.tenants,{id:tenant.id,propiedadId:remainingIds[0]||null,usuarioId})
+  updatedTenants.push({...saved,propiedadIds:remainingIds})
  }
  const deleted=await logicalDelete(tables.properties,{id,usuarioId})
  return {property:deleted,tenants:updatedTenants}
+}
+
+async function updateProperty(input){
+ const old=(await list(tables.properties,{id:input.id}))[0]
+ if(!old)throw new Error('Espacio no encontrado')
+ if(old.inquilinoActualId&&input.estado&&input.estado!=='ocupada'){
+  throw new Error('No puede cambiar el estado de un espacio mientras tenga un inquilino asignado')
+ }
+ return update(tables.properties,input)
+}
+
+async function replaceMovementRelations(movementId,propertyIds,relationAvailable){
+ if(!relationAvailable){
+  if(propertyIds.length>1)throw new Error('Ejecute la migracion de espacios multiples en Supabase antes de relacionar varios espacios')
+  return
+ }
+ const db=requireSupabase()
+ const {error:deleteError}=await db.from(tables.movementProperties).delete().eq('movimiento_id',movementId)
+ if(deleteError)throw deleteError
+ if(!propertyIds.length)return
+ const now=new Date().toISOString()
+ const rows=propertyIds.map(propiedadId=>toDb(tables.movementProperties,{
+  id:crypto.randomUUID(),
+  movimientoId,
+  propiedadId,
+  creadoEn:now
+ }))
+ const {error:insertError}=await db.from(tables.movementProperties).insert(rows)
+ if(insertError)throw insertError
+}
+
+async function validateMovementProperties(input,propertyIds){
+ const ids=uniqueIds(propertyIds)
+ const [properties,relationResult]=await Promise.all([
+  list(tables.properties,{}),
+  listRelations(tables.movementProperties)
+ ])
+ const propertyMap=new Map(properties.map(item=>[item.id,item]))
+ for(const id of ids){
+  if(!propertyMap.has(id))throw new Error('Uno de los espacios relacionados ya no existe')
+ }
+
+ if(input.tipo==='ingreso'&&input.inquilinoId){
+  const tenant=(await listTenants({id:input.inquilinoId}))[0]
+  if(!tenant)throw new Error('Inquilino o empresa no encontrado')
+  if(ids.some(id=>!tenant.propiedadIds.includes(id)))throw new Error('Seleccione solamente espacios asignados al inquilino o empresa')
+  if(tenant.tipo!=='empresa'&&ids.length>1)throw new Error('El inquilino seleccionado solo tiene un espacio')
+ }
+ if(ids.length>1&&!relationResult.available)throw new Error('Ejecute la migracion de espacios multiples en Supabase antes de relacionar varios espacios')
+ return {ids,relationAvailable:relationResult.available}
+}
+
+async function createMovement(input){
+ const session=requireAdmin()
+ const data=sanitize(input)
+ const propertyIds=uniqueIds(data.propiedadIds?.length?data.propiedadIds:[data.propiedadId])
+ const validated=await validateMovementProperties(data,propertyIds)
+ const saved=await create(tables.movements,{...data,propiedadId:propertyIds[0]||null,usuarioId:data.usuarioId||session.id})
+ await replaceMovementRelations(saved.id,propertyIds,validated.relationAvailable)
+ return {...saved,propiedadIds:propertyIds}
 }
 
 async function createMonthlyObligations({period,usuarioId}){
@@ -286,7 +488,7 @@ async function applyPayment(input){
 }
 
 async function dashboard(month,year){
- const [movements,obligations]=await Promise.all([list(tables.movements,{}),list(tables.obligations,{})])
+ const [movements,obligations]=await Promise.all([listMovements({}),list(tables.obligations,{})])
  const items=movements.filter(item=>{
   const date=new Date(`${item.fechaMovimiento}T12:00:00`)
   return date.getMonth()+1===Number(month)&&date.getFullYear()===Number(year)
@@ -300,7 +502,7 @@ async function dashboard(month,year){
 }
 
 async function statement(inquilinoId){
- const [tenants,obligations,movements]=await Promise.all([list(tables.tenants,{id:inquilinoId}),list(tables.obligations,{}),list(tables.movements,{})])
+ const [tenants,obligations,movements]=await Promise.all([listTenants({id:inquilinoId}),list(tables.obligations,{}),listMovements({})])
  const tenant=tenants[0]
  if(!tenant)throw new Error('Inquilino no encontrado')
  return {
@@ -315,18 +517,18 @@ export const dataService={
  setToken:setDataAuthToken,
  login,
  dashboard,
- movements:filters=>list(tables.movements,filters),
- createMovement:data=>create(tables.movements,data),
+ movements:filters=>listMovements(filters),
+ createMovement,
  updateMovement:data=>update(tables.movements,data),
  deleteMovement:(id,usuarioId)=>logicalDelete(tables.movements,{id,usuarioId}),
- tenants:()=>list(tables.tenants,{}),
+ tenants:()=>listTenants({}),
  createTenant,
  deleteTenant,
- updateTenant:data=>update(tables.tenants,data),
+ updateTenant,
  properties:()=>list(tables.properties,{}),
  createProperty:data=>create(tables.properties,data),
  deleteProperty,
- updateProperty:data=>update(tables.properties,data),
+ updateProperty,
  obligations:()=>list(tables.obligations,{}),
  statement,
  createObligations:(period,usuarioId)=>createMonthlyObligations({period,usuarioId}),

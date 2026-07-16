@@ -11,6 +11,7 @@ const USER_KEY='cuartos-user'
 
 const emptyData={movements:[],tenants:[],properties:[],obligations:[]}
 const demoData={movements:initialMovements,tenants:initialTenants,properties:initialProperties,obligations:[]}
+const propertyIdsOf=tenant=>[...new Set([...(tenant?.propiedadIds||[]),tenant?.propiedadId].filter(Boolean))]
 
 const readSavedUser=()=>{
  try{
@@ -101,7 +102,8 @@ export function AppProvider({children}){
  }
 
  const addMovement=async data=>{
-  const draft={...data,id:uid('mov'),monto:Number(data.monto),usuarioId:user.id,estado:'activo',creadoEn:new Date().toISOString()}
+  const propiedadIds=[...new Set((data.propiedadIds||[]).filter(Boolean))]
+  const draft={...data,propiedadIds,propiedadId:propiedadIds[0]||data.propiedadId||null,id:uid('mov'),monto:Number(data.monto),usuarioId:user.id,estado:'activo',creadoEn:new Date().toISOString()}
   setProcessing({active:true,message:'Guardando movimiento...'})
   try{
    const saved=dataService.usingMocks?draft:await dataService.createMovement(draft)
@@ -131,12 +133,39 @@ export function AppProvider({children}){
  }
 
  const addTenant=async data=>{
-  const draft={...data,id:uid('inq'),precioMensual:Number(data.precioMensual),usuarioId:user.id,estado:'activo'}
+  const propiedadIds=[...new Set((data.propiedadIds||[]).filter(Boolean))]
+  const draft={...data,propiedadIds,propiedadId:propiedadIds[0]||null,id:uid('inq'),precioMensual:Number(data.precioMensual),usuarioId:user.id,estado:'activo'}
   setProcessing({active:true,message:'Guardando inquilino...'})
   try{
    const saved=dataService.usingMocks?draft:await dataService.createTenant(draft)
    setTenants(v=>[...v,saved])
+   setProperties(v=>v.map(item=>saved.propiedadIds?.includes(item.id)?{...item,estado:'ocupada',inquilinoActualId:saved.id}:item))
    notify('Inquilino guardado')
+   return saved
+  }catch(e){
+   notify(e.message,'error')
+   throw e
+  }finally{
+   setProcessing({active:false,message:''})
+  }
+ }
+
+ const editTenant=async data=>{
+  const current=tenants.find(item=>item.id===data.id)
+  if(!current)throw new Error('Inquilino no encontrado')
+  const previousIds=propertyIdsOf(current)
+  const propiedadIds=[...new Set((data.propiedadIds||[]).filter(Boolean))]
+  const draft={...current,...data,propiedadIds,propiedadId:propiedadIds[0]||null,precioMensual:Number(data.precioMensual),usuarioId:user.id}
+  setProcessing({active:true,message:'Actualizando inquilino...'})
+  try{
+   const saved=dataService.usingMocks?draft:await dataService.updateTenant(draft)
+   setTenants(v=>v.map(item=>item.id===saved.id?saved:item))
+   setProperties(v=>v.map(item=>{
+    if(saved.propiedadIds.includes(item.id))return {...item,estado:'ocupada',inquilinoActualId:saved.id}
+    if(previousIds.includes(item.id)&&item.inquilinoActualId===saved.id)return {...item,estado:'disponible',inquilinoActualId:null}
+    return item
+   }))
+   notify('Inquilino actualizado')
    return saved
   }catch(e){
    notify(e.message,'error')
@@ -149,15 +178,15 @@ export function AppProvider({children}){
  const removeTenant=async tenant=>{
   setProcessing({active:true,message:'Eliminando inquilino...'})
   try{
-   let releasedProperty=null
+   let releasedProperties=[]
    if(!dataService.usingMocks){
     const result=await dataService.deleteTenant(tenant.id,user.id)
-    releasedProperty=result?.property||null
+    releasedProperties=result?.properties||[]
    }
    setTenants(v=>v.map(item=>item.id===tenant.id?{...item,estado:'eliminado'}:item))
-   if(tenant.propiedadId){
-    setProperties(v=>v.map(item=>item.id===tenant.propiedadId?{...item,estado:'disponible',inquilinoActualId:null,...(releasedProperty||{})}:item))
-   }
+   const assignedIds=propertyIdsOf(tenant)
+   const releasedById=new Map(releasedProperties.map(item=>[item.id,item]))
+   setProperties(v=>v.map(item=>assignedIds.includes(item.id)?{...item,estado:'disponible',inquilinoActualId:null,...(releasedById.get(item.id)||{})}:item))
    notify('Inquilino eliminado')
   }catch(e){
    notify(e.message,'error')
@@ -183,6 +212,24 @@ export function AppProvider({children}){
   }
  }
 
+ const editProperty=async data=>{
+  const current=properties.find(item=>item.id===data.id)
+  if(!current)throw new Error('Espacio no encontrado')
+  const draft={...current,...data,precioReferencial:Number(data.precioReferencial),usuarioId:user.id}
+  setProcessing({active:true,message:'Actualizando espacio...'})
+  try{
+   const saved=dataService.usingMocks?draft:await dataService.updateProperty(draft)
+   setProperties(v=>v.map(item=>item.id===saved.id?saved:item))
+   notify('Espacio actualizado')
+   return saved
+  }catch(e){
+   notify(e.message,'error')
+   throw e
+  }finally{
+   setProcessing({active:false,message:''})
+  }
+ }
+
  const removeProperty=async property=>{
   setProcessing({active:true,message:'Eliminando espacio...'})
   try{
@@ -196,7 +243,10 @@ export function AppProvider({children}){
     const updatedById=new Map(updatedTenants.map(item=>[item.id,item]))
     setTenants(v=>v.map(item=>updatedById.get(item.id)||item))
    }else{
-    setTenants(v=>v.map(item=>item.propiedadId===property.id?{...item,propiedadId:null}:item))
+    setTenants(v=>v.map(item=>{
+     const propiedadIds=propertyIdsOf(item).filter(id=>id!==property.id)
+     return propertyIdsOf(item).includes(property.id)?{...item,propiedadIds,propiedadId:propiedadIds[0]||null}:item
+    }))
    }
    notify('Espacio eliminado')
   }catch(e){
@@ -207,7 +257,7 @@ export function AppProvider({children}){
   }
  }
 
- const value=useMemo(()=>({user,login,logout,movements,tenants,properties,obligations:monthlyObligations,addMovement,removeMovement,addTenant,removeTenant,addProperty,removeProperty,toast,notify,processing:processing.active,processingMessage:processing.message,isAdmin:user?.rol==='administradora'}),[user,movements,tenants,properties,monthlyObligations,toast,processing])
+ const value=useMemo(()=>({user,login,logout,movements,tenants,properties,obligations:monthlyObligations,addMovement,removeMovement,addTenant,editTenant,removeTenant,addProperty,editProperty,removeProperty,toast,notify,processing:processing.active,processingMessage:processing.message,isAdmin:user?.rol==='administradora'}),[user,movements,tenants,properties,monthlyObligations,toast,processing])
  return <Context.Provider value={value}>{children}</Context.Provider>
 }
 

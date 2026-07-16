@@ -5,6 +5,8 @@ import {useApp} from '../context/AppContext'
 import {datePE,money} from '../utils/format'
 import {Empty,PageHeader} from '../components/ui'
 
+const propertyIdsOf=movement=>[...new Set([...(movement?.propiedadIds||[]),movement?.propiedadId].filter(Boolean))]
+
 export default function MovementsPage(){
  const {movements,tenants,properties,removeMovement,isAdmin}=useApp()
  const [search,setSearch]=useState('')
@@ -58,12 +60,12 @@ export default function MovementsPage(){
      <thead className="bg-stone-50 text-sm text-stone-500"><tr>{['Fecha','Tipo','Persona / concepto','Espacio','Metodo','Monto',''].map(label=><th key={label} className="px-4 py-3">{label}</th>)}</tr></thead>
      <tbody className="divide-y divide-stone-100">{rows.map(item=>{
       const tenant=tenants.find(row=>row.id===item.inquilinoId)
-      const property=properties.find(row=>row.id===item.propiedadId)
+      const relatedProperties=properties.filter(row=>propertyIdsOf(item).includes(row.id))
       return <tr key={item.id}>
        <td className="whitespace-nowrap px-4 py-4">{datePE(item.fechaMovimiento)}</td>
        <td className={`px-4 py-4 font-bold capitalize ${item.tipo==='ingreso'?'text-income':'text-expense'}`}>{item.tipo}</td>
-       <td className="max-w-xs px-4 py-4"><b className="break-words">{tenant?.nombre||item.persona||'--'}</b><p className="break-words text-sm text-stone-500">{item.concepto}{item.periodosRelacionados&&` · ${item.periodosRelacionados}`}</p></td>
-       <td className="px-4 py-4">{property?.codigo||'--'}</td>
+       <td className="max-w-xs px-4 py-4"><b className="break-words">{tenant?.nombre||'--'}</b><p className="break-words text-sm text-stone-500">{item.concepto}{item.periodosRelacionados&&` · ${item.periodosRelacionados}`}</p></td>
+       <td className="px-4 py-4">{relatedProperties.length?relatedProperties.map(property=>property.codigo).join(', '):'--'}</td>
        <td className="px-4 py-4">{item.metodoPago}</td>
        <td className={`whitespace-nowrap px-4 py-4 font-bold ${item.tipo==='ingreso'?'text-income':'text-expense'}`}>{money(item.monto)}</td>
        <td className="px-4 py-4">{isAdmin&&<button onClick={()=>handleDelete(item)} className="grid h-11 w-11 place-items-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label={`Eliminar ${item.concepto}`}><Trash2 size={18}/></button>}</td>
@@ -74,7 +76,7 @@ export default function MovementsPage(){
 
    <div className="divide-y divide-stone-100 md:hidden">{rows.map(item=>{
     const tenant=tenants.find(row=>row.id===item.inquilinoId)
-    const property=properties.find(row=>row.id===item.propiedadId)
+    const relatedProperties=properties.filter(row=>propertyIdsOf(item).includes(row.id))
     return <article key={item.id} className="min-w-0 p-4">
      <div className="flex min-w-0 items-start justify-between gap-3">
       <div className="min-w-0">
@@ -86,7 +88,7 @@ export default function MovementsPage(){
      <div className="mt-3 flex min-w-0 items-end justify-between gap-3 border-t border-stone-100 pt-3">
       <div className="min-w-0 text-xs text-stone-500">
        <p className="break-words capitalize">{item.tipo}{tenant?.nombre?` · ${tenant.nombre}`:''}</p>
-       {property&&<p className="mt-0.5 break-words">Espacio {property.codigo}</p>}
+       {!!relatedProperties.length&&<p className="mt-0.5 break-words">Espacio{relatedProperties.length>1?'s':''} {relatedProperties.map(property=>property.codigo).join(', ')}</p>}
       </div>
       {isAdmin&&<button onClick={()=>handleDelete(item)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-stone-400 hover:bg-red-50 hover:text-red-600" aria-label={`Eliminar ${item.concepto}`}><Trash2 size={18}/></button>}
      </div>
